@@ -118,12 +118,30 @@ try {
     $connection = Initialize-SQLiteConnection -GogGalaxyDb $GogDb
     
     # Query for installed games using the new helper function
+    
 $query = @"
 SELECT DISTINCT
     p.id,
     p.name,
     ld.title as display_name,
-    ibp.installationPath
+    ibp.installationPath,
+    -- Use PlayTasks with isPrimary = 1 to get the authoritative executable and launch parameters
+    (
+        SELECT pltp.executablePath
+        FROM PlayTasks pt
+        JOIN PlayTaskLaunchParameters pltp ON pt.id = pltp.playTaskId
+        JOIN ProductsToReleaseKeys ptrk ON pt.gameReleaseKey = ptrk.releaseKey
+        WHERE ptrk.gogId = p.id AND pt.isPrimary = 1
+        LIMIT 1
+    ) as gogExecutablePath,
+    (
+        SELECT pltp.commandLineArgs
+        FROM PlayTasks pt
+        JOIN PlayTaskLaunchParameters pltp ON pt.id = pltp.playTaskId
+        JOIN ProductsToReleaseKeys ptrk ON pt.gameReleaseKey = ptrk.releaseKey
+        WHERE ptrk.gogId = p.id AND pt.isPrimary = 1
+        LIMIT 1
+    ) as gogCommandLineArgs
 FROM Products p
 JOIN InstalledProducts ip ON p.id = ip.productId
 JOIN InstalledBaseProducts ibp ON ibp.productId = p.id
@@ -141,98 +159,38 @@ ORDER BY COALESCE(ld.title, p.name)
         Write-Host "  Title: $gameName" -ForegroundColor Yellow
         Write-Host "  Installation Path: $($result.installationPath)" -ForegroundColor Gray
         
-        # Look for the executable in the installation path (recursively)
-        $exePath = Join-Path $result.installationPath "*.exe"
-        $exeFiles = Get-ChildItem -Path $result.installationPath -Include "*.exe" -File -Recurse -ErrorAction SilentlyContinue
+        $mainExe = $null # Initialize mainExe
+
+        # Initialize launch arguments
+        $launchArgs = ""
         
-        if ($exeFiles) {
-            # Filter out common installer/uninstaller executables
-            $excludePatterns = @(
-                'unins\d*\.exe$',
-                'install.*\.exe$',
-                'setup.*\.exe$',
-                'launcher.*\.exe$',
-                'loader\.exe$',
-                'language_setup\.exe$',
-                'redist\\.*\.exe$',
-                '\\support\\.*\.exe$',
-                'goggame-.*\.exe$',
-                'dosbox\.exe$',      # Exclude DOSBox executable
-                'DOSBox\.exe$',      # Case-insensitive variant
-                'scummvm\.exe$',     # Exclude ScummVM executable
-                'GOGDOSConfig\.exe$' # Exclude GOG DOS config tool
-            )
+        # Use PlayTasks with isPrimary = 1 to get the authoritative executable
+        if ($result.gogExecutablePath) {
+            Write-Host "  Using GOG PlayTasks primary executable: $($result.gogExecutablePath)" -ForegroundColor Magenta
+            $resolvedGogExePath = $result.gogExecutablePath
             
-            $gameExes = $exeFiles | Where-Object {
-                $exclude = $false
-                foreach ($pattern in $excludePatterns) {
-                    if ($_.Name -match $pattern) {
-                        $exclude = $true
-                        break
-                    }
+            # Construct full path if relative
+            if (-not ([System.IO.Path]::IsPathRooted($resolvedGogExePath))) {
+                $resolvedGogExePath = Join-Path $result.installationPath $resolvedGogExePath
+            }
+
+            if (Test-Path $resolvedGogExePath -PathType Leaf) {
+                $mainExe = Get-Item $resolvedGogExePath
+                Write-Host "    Executable found: $($mainExe.FullName)" -ForegroundColor Green
+                
+                # Capture launch arguments if available
+                if ($result.gogCommandLineArgs) {
+                    $launchArgs = $result.gogCommandLineArgs
+                    Write-Host "    Launch arguments: $launchArgs" -ForegroundColor Cyan
                 }
-                -not $exclude
+            } else {
+                Write-Host "    Executable path not found: $resolvedGogExePath" -ForegroundColor Red
             }
-            
-            # Try to find the main executable
-            $mainExe = $null
-            
-            # First try: Look for known game-specific executables
-            $gameSpecificPatterns = @{
-                'SimCity(TM)? 2000.*' = '(sc2000|SC2000|Sim2000|SC2K)\.exe$'  # Add SC2K.EXE pattern
-                'SimCity(TM)? 3000.*' = '(sc3u|SC3U)\.exe$'
-                'Fallout: London' = '(f4se_loader|fallout4|Fallout4)\.exe$'    # Will also check parent directory for Fallout 4
-                'Fallout.*' = 'Fallout\d?\.exe$'
-                'Z.*' = 'Z\.exe$'
-                'Tomb Raider.*' = 'trl\.exe$'
-                'Caesar.*' = 'c3\.exe$'
-                'Pharaoh.*' = 'Pharaoh\.exe$'
-                'Locomotion.*' = 'LOCO\.exe$'
-                'M\.A\.X\.' = 'MAXRUN\.exe$'
-                'Warcraft.*' = 'Warcraft.*BNE.*\.exe$'     # Prefer Battle.net Edition executable
-            }
-            
-            foreach ($pattern in $gameSpecificPatterns.Keys) {
-                if ($gameName -match $pattern) {
-                    $mainExe = $gameExes | Where-Object { $_.Name -match $gameSpecificPatterns[$pattern] } | Select-Object -First 1
-                    if ($mainExe) { break }
-                }
-            }
-            
-            # Special handling for Fallout: London - try to use Fallout 4's executable if not found
-            if ($gameName -match 'Fallout: London' -and -not $mainExe) {
-                $fallout4Path = Join-Path (Split-Path $result.installationPath -Parent) "Fallout 4 GOTY\Fallout4.exe"
-                if (Test-Path $fallout4Path) {
-                    $mainExe = Get-Item $fallout4Path
-                }
-            }
-            
-            # Second try: Look for an exe matching the game name
-            if (-not $mainExe) {
-                $cleanTitle = [regex]::Escape($gameName.Split(':')[0].Trim())
-                $mainExe = $gameExes | Where-Object { $_.Name -match "^$cleanTitle.*\.exe$" } | Select-Object -First 1
-            }
-            
-            # Third try: Look for common main executable names
-            if (-not $mainExe) {
-                $commonNames = @(
-                    'game\.exe$',
-                    'play\.exe$',
-                    'run\.exe$',
-                    '\w+run\.exe$'
-                )
-                foreach ($pattern in $commonNames) {
-                    $mainExe = $gameExes | Where-Object { $_.Name -match $pattern } | Select-Object -First 1
-                    if ($mainExe) { break }
-                }
-            }
-            
-            # Final fallback: Use the largest exe
-            if (-not $mainExe -and $gameExes) {
-                $mainExe = $gameExes | Sort-Object Length -Descending | Select-Object -First 1
-            }
-            
-            if ($mainExe) {
+        } else {
+            Write-Host "  No executable path found in GOG PlayTasks for this game." -ForegroundColor Red
+        }
+
+        if ($mainExe) {
                 Write-Host "  Found executable: $($mainExe.Name)" -ForegroundColor Gray
                 
                 $game = @{
@@ -240,6 +198,7 @@ ORDER BY COALESCE(ld.title, p.name)
                     id = $result.id
                     installationPath = $result.installationPath
                     executablePath = $mainExe.FullName
+                    launchArgs = $launchArgs
                 }
                 
                 if (-not $game.executablePath -or -not $game.installationPath) {
@@ -255,12 +214,19 @@ ORDER BY COALESCE(ld.title, p.name)
                         Title = $title
                         Path = $executable
                         StartDir = Split-Path $executable
+                        LaunchOptions = $game.launchArgs
                     }
-                    Write-Host "Found game: $title" -ForegroundColor Green
+                    
+                    if ($game.launchArgs) {
+                        Write-Host "Found game: $title (with launch options: $($game.launchArgs))" -ForegroundColor Green
+                    } else {
+                        Write-Host "Found game: $title" -ForegroundColor Green
+                    }
                 }
-            }
+        } else {
+            Write-Host "  No suitable executable found" -ForegroundColor Yellow
         }
-    }
+    } # End of foreach ($result in $results)
     
     # Build new shortcuts.vdf with GOG games
     if ($games.Count -gt 0) {
@@ -271,6 +237,7 @@ ORDER BY COALESCE(ld.title, p.name)
                 Name = $game.Title
                 ExePath = $game.Path
                 StartDir = $game.StartDir
+                LaunchOptions = $game.LaunchOptions
             }
         }
         

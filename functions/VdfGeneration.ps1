@@ -145,7 +145,8 @@ function Build-ShortcutsVdf {
             
             $bytes.Add(0x01)  # String type
             Write-VdfString -bytes $bytes -value "LaunchOptions"
-            Write-VdfString -bytes $bytes -value ""
+            $launchOptions = if ($entry.LaunchOptions) { $entry.LaunchOptions } else { "" }
+            Write-VdfString -bytes $bytes -value $launchOptions
             
             # Write hidden field
             $bytes.Add(0x02)  # Binary type
