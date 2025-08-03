@@ -1,6 +1,5 @@
 # DatabaseFunctions.ps1
 # Functions for interacting with GOG Galaxy SQLite database
-# Updated: August 3, 2025 - Enhanced SQL queries for PlayTasks integration and improved error handling
 
 function Initialize-SQLiteConnection {
     <#
