@@ -1,6 +1,5 @@
 # ExecutableValidation.ps1
 # Functions for validating game executables
-# Updated: August 3, 2025 - Added IsGogAuthoritative parameter for bypassing utility checks on GOG-verified executables
 
 function Get-MainExecutable {
     param(
@@ -32,9 +31,7 @@ function Test-GameExecutable {
         [Parameter(Mandatory=$true)]
         [string]$exePath,
         [Parameter(Mandatory=$false)]
-        [string]$title = "",
-        [Parameter(Mandatory=$false)]
-        [switch]$IsGogAuthoritative  # Added Aug 3, 2025 - Bypasses utility checks for GOG-verified executables
+        [string]$title = ""
     )
     
     try {
@@ -56,28 +53,23 @@ function Test-GameExecutable {
             return $false
         }
 
-        # Check known utility patterns (but skip if this is GOG-authoritative)
-        # Enhancement Aug 3, 2025: GOG PlayTasks data is considered authoritative
-        if (-not $IsGogAuthoritative) {
-            $utilityPatterns = @(
-                '^unins(?:\d+)?\.exe$',
-                '^uninst(?:all)?\.exe$',
-                '^setup\.exe$',
-                '^install(?:er)?\.exe$',
-                '^launcher\.exe$',
-                '^config.*\.exe$',
-                '^patch.*\.exe$',
-                '^update.*\.exe$'
-            )
+        # Check known utility patterns
+        $utilityPatterns = @(
+            '^unins(?:\d+)?\.exe$',
+            '^uninst(?:all)?\.exe$',
+            '^setup\.exe$',
+            '^install(?:er)?\.exe$',
+            '^launcher\.exe$',
+            '^config.*\.exe$',
+            '^patch.*\.exe$',
+            '^update.*\.exe$'
+        )
 
-            foreach ($pattern in $utilityPatterns) {
-                if ($exeName -match $pattern) {
-                    Write-Verbose "Rejecting utility executable: $exeName"
-                    return $false
-                }
+        foreach ($pattern in $utilityPatterns) {
+            if ($exeName -match $pattern) {
+                Write-Verbose "Rejecting utility executable: $exeName"
+                return $false
             }
-        } else {
-            Write-Verbose "Skipping utility pattern check for GOG-authoritative executable: $exeName"
         }
 
         # Additional validation for generic titles

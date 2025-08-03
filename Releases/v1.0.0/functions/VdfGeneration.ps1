@@ -1,6 +1,5 @@
 # VdfGeneration.ps1
 # Functions for Steam shortcuts.vdf file generation
-# Updated: August 3, 2025 - Added comprehensive VDF reading, existing shortcuts preservation, and intelligent merging
 
 # Function to read existing shortcuts from VDF file
 function Read-ExistingShortcuts {
@@ -154,9 +153,7 @@ function Merge-GameShortcuts {
     $mergedShortcuts += $ExistingShortcuts
     
     # Add new GOG games, but only if they don't already exist
-    Write-Host "Processing $($NewGogGames.Count) GOG games for merging:" -ForegroundColor Cyan
     foreach ($gogGame in $NewGogGames) {
-        Write-Host "  Checking: $($gogGame.Title) -> $($gogGame.Path)" -ForegroundColor Gray
         if (-not (Test-GameExists -ExistingShortcuts $ExistingShortcuts -GamePath $gogGame.Path -GameName $gogGame.Title)) {
             $mergedShortcuts += @{
                 Name = $gogGame.Title
@@ -165,10 +162,10 @@ function Merge-GameShortcuts {
                 LaunchOptions = $gogGame.LaunchOptions
             }
             $addedCount++
-            Write-Host "  [+] Added new GOG game: $($gogGame.Title)" -ForegroundColor Green
+            Write-Verbose "Added new GOG game: $($gogGame.Title)"
         } else {
             $skippedCount++
-            Write-Host "  [!] Skipped duplicate game: $($gogGame.Title) (Path: $($gogGame.Path))" -ForegroundColor Yellow
+            Write-Verbose "Skipped duplicate game: $($gogGame.Title)"
         }
     }
     
