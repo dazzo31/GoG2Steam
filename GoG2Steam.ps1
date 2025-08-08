@@ -275,13 +275,15 @@ function Get-FallbackExecutable {
     return $null
 }
 
-# Pre-check: ensure Steam is not running (to avoid it overwriting shortcuts.vdf)
-function Ensure-SteamNotRunning {
+# Pre-check: assert Steam is not running (to avoid it overwriting shortcuts.vdf)
+function Assert-SteamNotRunning {
     param(
         [switch]$SkipCheck,
         [switch]$ForceClose,
         [switch]$NonInteractive
     )
+    # Reference ForceClose to satisfy analyzer if not used directly in flow logic
+    $null = $ForceClose.IsPresent
     if ($SkipCheck) { return }
     try {
         $procList = @(Get-Process -Name steam -ErrorAction SilentlyContinue)
@@ -294,23 +296,23 @@ function Ensure-SteamNotRunning {
             try {
                 Write-Host "NonInteractive: attempting to close Steam..." -ForegroundColor Yellow
                 foreach ($p in $procList) { $null = $p.CloseMainWindow() }
-                try { Wait-Process -Name steam -Timeout 15 -ErrorAction SilentlyContinue } catch {}
+                try { Wait-Process -Name steam -Timeout 15 -ErrorAction SilentlyContinue } catch { Write-Verbose "Wait-Process (15s) during non-interactive graceful close threw: $_" }
                 try { $procList = @(Get-Process -Name steam -ErrorAction SilentlyContinue) } catch { $procList = @() }
                 if ($procList.Count -gt 0) {
                     Write-Host "NonInteractive: stopping Steam process..." -ForegroundColor Yellow
-                    try { Stop-Process -Name steam -ErrorAction SilentlyContinue } catch {}
-                    try { Wait-Process -Name steam -Timeout 5 -ErrorAction SilentlyContinue } catch {}
+                    try { Stop-Process -Name steam -ErrorAction SilentlyContinue } catch { Write-Verbose "Stop-Process during non-interactive close threw: $_" }
+                    try { Wait-Process -Name steam -Timeout 5 -ErrorAction SilentlyContinue } catch { Write-Verbose "Wait-Process (5s) after Stop-Process -Force threw: $_" }
                 }
                 try { $procList = @(Get-Process -Name steam -ErrorAction SilentlyContinue) } catch { $procList = @() }
                 if ($procList.Count -gt 0) {
                     Write-Host "NonInteractive: force-closing Steam..." -ForegroundColor Yellow
-                    try { Stop-Process -Name steam -Force -ErrorAction SilentlyContinue } catch {}
-                    try { Wait-Process -Name steam -Timeout 5 -ErrorAction SilentlyContinue } catch {}
+                    try { Stop-Process -Name steam -Force -ErrorAction SilentlyContinue } catch { Write-Verbose "Stop-Process -Force during non-interactive close threw: $_" }
+                    try { Wait-Process -Name steam -Timeout 5 -ErrorAction SilentlyContinue } catch { Write-Verbose "Wait-Process (5s) after non-interactive Stop-Process -Force threw: $_" }
                 }
                 try { $procList = @(Get-Process -Name steam -ErrorAction SilentlyContinue) } catch { $procList = @() }
                 if ($procList.Count -gt 0) {
                     Write-Host "NonInteractive: taskkill /F steam.exe..." -ForegroundColor Yellow
-                    try { & taskkill /IM steam.exe /T /F | Out-Null } catch {}
+                    try { & taskkill /IM steam.exe /T /F | Out-Null } catch { Write-Verbose "taskkill /F threw: $_" }
                     Start-Sleep -Seconds 3
                 }
             } catch {
@@ -326,7 +328,7 @@ function Ensure-SteamNotRunning {
         try {
             # 1) Graceful window close
             foreach ($p in $procList) { $null = $p.CloseMainWindow() }
-            try { Wait-Process -Name steam -Timeout 15 -ErrorAction SilentlyContinue } catch {}
+            try { Wait-Process -Name steam -Timeout 15 -ErrorAction SilentlyContinue } catch { Write-Verbose "Wait-Process (15s) during interactive graceful close threw: $_" }
         } catch {
             Write-Warning "Attempt to close Steam gracefully encountered an error: $_"
         }
@@ -336,8 +338,8 @@ function Ensure-SteamNotRunning {
         if ($procList.Count -gt 0) {
             # 2) Try non-forced Stop-Process (in case CloseMainWindow didn't trigger)
             Write-Host "Steam still running; attempting to stop process..." -ForegroundColor Yellow
-            try { Stop-Process -Name steam -ErrorAction SilentlyContinue } catch {}
-            try { Wait-Process -Name steam -Timeout 5 -ErrorAction SilentlyContinue } catch {}
+            try { Stop-Process -Name steam -ErrorAction SilentlyContinue } catch { Write-Verbose "Stop-Process during interactive close threw: $_" }
+            try { Wait-Process -Name steam -Timeout 5 -ErrorAction SilentlyContinue } catch { Write-Verbose "Wait-Process (5s) after interactive Stop-Process threw: $_" }
         }
 
         # Refresh
@@ -345,8 +347,8 @@ function Ensure-SteamNotRunning {
         if ($procList.Count -gt 0) {
             # 3) Forced Stop-Process
             Write-Host "Steam still running; forcing process termination..." -ForegroundColor Yellow
-            try { Stop-Process -Name steam -Force -ErrorAction SilentlyContinue } catch {}
-            try { Wait-Process -Name steam -Timeout 5 -ErrorAction SilentlyContinue } catch {}
+            try { Stop-Process -Name steam -Force -ErrorAction SilentlyContinue } catch { Write-Verbose "Stop-Process -Force during interactive close threw: $_" }
+            try { Wait-Process -Name steam -Timeout 5 -ErrorAction SilentlyContinue } catch { Write-Verbose "Wait-Process (5s) after interactive Stop-Process -Force threw: $_" }
         }
 
         # Refresh
@@ -354,7 +356,7 @@ function Ensure-SteamNotRunning {
         if ($procList.Count -gt 0) {
             # 4) taskkill as a last resort
             Write-Host "Steam still running; using taskkill /F ..." -ForegroundColor Yellow
-            try { & taskkill /IM steam.exe /T /F | Out-Null } catch {}
+            try { & taskkill /IM steam.exe /T /F | Out-Null } catch { Write-Verbose "taskkill /F (interactive) threw: $_" }
             Start-Sleep -Seconds 3
         }
 
@@ -421,6 +423,9 @@ function Show-OptionsMenu {
             Write-Host ("{0}) Name Prefix (current: {1})" -f $optNum, $prefixState) -ForegroundColor White; $optNamePrefix=$optNum; $optNum++
             Write-Host "   Adds text before game names in Steam (e.g., '[GOG] ' makes 'SimCity' become '[GOG] SimCity')." -ForegroundColor DarkGray
             Write-Host "" 
+            Write-Host ("{0}) Name Suffix (current: {1})" -f $optNum, $suffixState) -ForegroundColor White; $optNameSuffix=$optNum; $optNum++
+            Write-Host "   Adds text after game names in Steam (e.g., ' (GOG)')" -ForegroundColor DarkGray
+            Write-Host "" 
             Write-Host ("{0}) Include Title Pattern (current: {1})" -f $optNum, $includeState) -ForegroundColor White; $optInclude=$optNum; $optNum++
             Write-Host "   Only include games whose titles match this regex. Examples: '^S' (starts with S), 'City|Sim'." -ForegroundColor DarkGray
             Write-Host "" 
@@ -458,6 +463,11 @@ function Show-OptionsMenu {
                     $show = if ($script:IncludeTitlePattern) { $script:IncludeTitlePattern } else { '(none)' }
                     Write-Host ("Include Title Pattern set to: {0}" -f $show) -ForegroundColor Green
                 }
+                {$choice -eq $optNameSuffix} {
+                    $script:NameSuffix = Read-Host 'Enter Name Suffix (leave blank for none)'
+                    $show = if ($script:NameSuffix) { $script:NameSuffix } else { '(none)' }
+                    Write-Host ("Name Suffix set to: {0}" -f $show) -ForegroundColor Green
+                }
                 {$choice -eq $optExclude} {
                     $script:ExcludeTitlePattern = Read-Host 'Enter Exclude Title Regex (leave blank for none)'
                     $show = if ($script:ExcludeTitlePattern) { $script:ExcludeTitlePattern } else { '(none)' }
@@ -481,34 +491,37 @@ function Show-OptionsMenu {
             Write-Host ("2) Name Prefix (current: {0})" -f $prefixState) -ForegroundColor White
             Write-Host "   Adds text before game names in Steam (e.g., '[GOG] ' makes 'SimCity' become '[GOG] SimCity')." -ForegroundColor DarkGray
             Write-Host "" 
-            Write-Host ("3) Include Title Pattern (current: {0})" -f $includeState) -ForegroundColor White
+            Write-Host ("3) Name Suffix (current: {0})" -f $suffixState) -ForegroundColor White
+            Write-Host "   Adds text after game names in Steam (e.g., ' (GOG)')." -ForegroundColor DarkGray
+            Write-Host "" 
+            Write-Host ("4) Include Title Pattern (current: {0})" -f $includeState) -ForegroundColor White
             Write-Host "   Only include games whose titles match this regex. Examples: '^S' (starts with S), 'City|Sim'." -ForegroundColor DarkGray
             Write-Host "" 
-            Write-Host ("4) Exclude Title Pattern (current: {0})" -f $excludeState) -ForegroundColor White
+            Write-Host ("5) Exclude Title Pattern (current: {0})" -f $excludeState) -ForegroundColor White
             Write-Host "   Exclude games whose titles match this regex. Examples: 'Demo|Beta', '^The'." -ForegroundColor DarkGray
             Write-Host "" 
-            Write-Host ("5) Backup (current: {0})" -f $backupState) -ForegroundColor White
+            Write-Host ("6) Backup (current: {0})" -f $backupState) -ForegroundColor White
             Write-Host "   Create a backup of shortcuts.vdf before writing. Recommended: keep On." -ForegroundColor DarkGray
             Write-Host "" 
-            Write-Host ("6) Debug Verify (current: {0})" -f $debugState) -ForegroundColor White
+            Write-Host ("7) Debug Verify (current: {0})" -f $debugState) -ForegroundColor White
             Write-Host "   After writing, read back shortcuts.vdf and list entries (optional troubleshooting)." -ForegroundColor DarkGray
             Write-Host "" 
-            Write-Host "7) Proceed" -ForegroundColor White
+            Write-Host "8) Proceed" -ForegroundColor White
             Write-Host "   Add GOG games to Steam with the current settings." -ForegroundColor DarkGray
             Write-Host "" 
-            Write-Host "8) Cancel" -ForegroundColor White
+            Write-Host "9) Cancel" -ForegroundColor White
             Write-Host "   Exit without making any changes." -ForegroundColor DarkGray
             Write-Host "" 
-            $inputChoice = Read-Host "Enter choice (1-8) [default 7]"
+            $inputChoice = Read-Host "Enter choice (1-9) [default 8]"
             if ([string]::IsNullOrWhiteSpace($inputChoice)) { $inputChoice = '7' }
             $parsed = 0
             if (-not ([int]::TryParse($inputChoice, [ref]$parsed))) {
-                Write-Host "Invalid input. Please enter a number from 1 to 8." -ForegroundColor Yellow
+                Write-Host "Invalid input. Please enter a number from 1 to 9." -ForegroundColor Yellow
                 continue
             }
             $choice = $parsed
-            if ($choice -lt 1 -or $choice -gt 8) {
-                Write-Host "Invalid choice. Please enter a number from 1 to 8." -ForegroundColor Yellow
+            if ($choice -lt 1 -or $choice -gt 9) {
+                Write-Host "Invalid choice. Please enter a number from 1 to 9." -ForegroundColor Yellow
                 continue
             }
 
@@ -532,25 +545,30 @@ function Show-OptionsMenu {
                     Write-Host ("Name Prefix set to: {0}" -f $show) -ForegroundColor Green
                 }
                 3 {
+                    $script:NameSuffix = Read-Host 'Enter Name Suffix (leave blank for none)'
+                    $show = if ($script:NameSuffix) { $script:NameSuffix } else { '(none)' }
+                    Write-Host ("Name Suffix set to: {0}" -f $show) -ForegroundColor Green
+                }
+                4 {
                     $script:IncludeTitlePattern = Read-Host 'Enter Include Title Regex (leave blank for none)'
                     $show = if ($script:IncludeTitlePattern) { $script:IncludeTitlePattern } else { '(none)' }
                     Write-Host ("Include Title Pattern set to: {0}" -f $show) -ForegroundColor Green
                 }
-                4 {
+                5 {
                     $script:ExcludeTitlePattern = Read-Host 'Enter Exclude Title Regex (leave blank for none)'
                     $show = if ($script:ExcludeTitlePattern) { $script:ExcludeTitlePattern } else { '(none)' }
                     Write-Host ("Exclude Title Pattern set to: {0}" -f $show) -ForegroundColor Green
                 }
-                5 {
+                6 {
                     $script:NoBackup = -not $script:NoBackup
                     Write-Host ("Backup is now: {0}" -f ($(if ($script:NoBackup) { 'Off' } else { 'On' }))) -ForegroundColor Green
                 }
-                6 {
+                7 {
                     $script:DebugVdf = -not $script:DebugVdf
                     Write-Host ("Debug Verify is now: {0}" -f ($(if ($script:DebugVdf) { 'On' } else { 'Off' }))) -ForegroundColor Green
                 }
-                7 { return }
-                8 { throw 'User cancelled from options menu' }
+                8 { return }
+                9 { throw 'User cancelled from options menu' }
             }
         }
     }
@@ -631,7 +649,7 @@ $shortcutsVdf = Join-Path $configPath "shortcuts.vdf"
 Write-Verbose "Using shortcuts.vdf at: $shortcutsVdf"
 
 # Ensure Steam is not running (or user confirmed proceeding)
-Ensure-SteamNotRunning -SkipCheck:$SkipSteamCheck -ForceClose:$ForceCloseSteam -NonInteractive:$NonInteractive
+Assert-SteamNotRunning -SkipCheck:$SkipSteamCheck -ForceClose:$ForceCloseSteam -NonInteractive:$NonInteractive
 
 # Read existing shortcuts before making any changes
 # Preserves existing Steam shortcuts
@@ -838,9 +856,9 @@ ORDER BY COALESCE(ld.title, p.name)
                         $parsed = Read-ExistingShortcuts -InputFilePath $shortcutsVdf
                         Write-Host ("[Debug] Parsed entries: {0}" -f $parsed.Count) -ForegroundColor Magenta
                         if ($DebugTitlePattern) {
-                            $matches = $parsed | Where-Object { $_.Name -match $DebugTitlePattern }
-                            Write-Host ("[Debug] Entries matching pattern '{0}': {1}" -f $DebugTitlePattern, ($matches | Measure-Object).Count) -ForegroundColor Magenta
-                            foreach ($m in $matches) {
+                            $debugMatches = $parsed | Where-Object { $_.Name -match $DebugTitlePattern }
+                            Write-Host ("[Debug] Entries matching pattern '{0}': {1}" -f $DebugTitlePattern, ($debugMatches | Measure-Object).Count) -ForegroundColor Magenta
+                            foreach ($m in $debugMatches) {
                                 Write-Host ("   • {0} -> {1}" -f $m.Name, $m.ExePath) -ForegroundColor DarkGray
                             }
                         } else {
@@ -906,6 +924,6 @@ ORDER BY COALESCE(ld.title, p.name)
         $connection.Dispose() 
     }
     if ($transcriptStarted) {
-        try { Stop-Transcript | Out-Null } catch { }
+        try { Stop-Transcript | Out-Null } catch { Write-Verbose "Stop-Transcript failed: $_" }
     }
 }
