@@ -2,14 +2,18 @@
 
 ## Overview
 
-A PowerShell script that automatically imports your GOG Galaxy games into Steam. Built on top of the Steam VDF Generator module, this script:
+Bring your entire GOG Galaxy library into Steam in minutes — with zero manual tedium. GoG2Steam scans your GOG installs, finds the right executables (using GOG’s authoritative PlayTasks data), and writes polished, duplicate‑free non‑Steam shortcuts straight into Steam.
 
-- Automatically discovers installed GOG games through Galaxy's database
-- Creates non-Steam shortcuts for all installed GOG games
-- Intelligently locates main game executables using GOG's authoritative PlayTasks data
-- Preserves existing Steam shortcuts while adding new GOG games
-- Avoids duplicate entries through intelligent merging
-- Tags games with "GOG" and "GOG Galaxy" for easy identification
+Why you’ll love it:
+- One‑click import: Automatically discovers every installed GOG game
+- Looks great in Steam: Clean names with optional prefixes/suffixes and consistent formatting
+- Uses the right EXE: Leverages GOG PlayTasks (isPrimary=1) and smart fallbacks when needed
+- Respects your setup: Preserves your existing non‑Steam shortcuts and avoids duplicates
+- Safe by default: Backs up shortcuts.vdf (unless you opt out) and checks that Steam isn’t running
+- Smooth UX: Interactive menu to pick your Steam user and tweak options, or run fully unattended
+- Optional verification: Debug mode can read back the written file and show what’s inside
+
+Make Steam your single launcher — keep friends, overlays, controller configs, and playtime tracking in one place.
 
 ## Recent Updates
 
@@ -44,15 +48,47 @@ A PowerShell script that automatically imports your GOG Galaxy games into Steam.
 
 ## Usage
 
+Quick start (interactive):
 ```powershell
-.\GoG2Steam.ps1 [-SteamPath <path>] [-GogPath <path>] [-GogDb <path>] [-NoBackup]
+# Opens the menu to select Steam user and tweak options
+pwsh -NoProfile -File .\GoG2Steam.ps1
 ```
 
-Parameters:
-- `-SteamPath`: Steam installation directory (default: Program Files)
-- `-GogPath`: GOG Galaxy installation directory (default: Program Files)
-- `-GogDb`: GOG Galaxy database path (default: ProgramData)
-- `-NoBackup`: Skip backing up existing shortcuts.vdf
+Unattended run (safe with pre‑checks and backup):
+```powershell
+pwsh -NoProfile -File .\GoG2Steam.ps1 -NonInteractive
+```
+
+Dry run (no file writes, full preview with optional debug):
+```powershell
+pwsh -NoProfile -File .\GoG2Steam.ps1 -NonInteractive -DryRun -DebugVdf
+```
+
+Filter and naming examples:
+```powershell
+# Add a prefix to names and only import Sim titles
+pwsh -File .\GoG2Steam.ps1 -NamePrefix '[GOG] ' -IncludeTitlePattern 'Sim|City'
+
+# Exclude demos/betas and append a suffix
+pwsh -File .\GoG2Steam.ps1 -ExcludeTitlePattern 'Demo|Beta' -NameSuffix ' (GOG)'
+```
+
+All parameters:
+- `-SteamPath <string>`: Steam installation directory (default: Program Files (x86)\Steam)
+- `-GogPath <string>`: GOG Galaxy installation directory (default: Program Files (x86)\GOG Galaxy)
+- `-GogDb <string>`: Path to GOG Galaxy SQLite DB (default: ProgramData\GOG.com\Galaxy\storage\galaxy-2.0.db)
+- `-SteamUserId <string>`: Target Steam user ID (numeric). If omitted, most‑recent user is selected automatically
+- `-SelectUser` (switch): Show a user selector even if a default can be inferred (interactive mode)
+- `-NamePrefix <string>` / `-NameSuffix <string>`: Text to add before/after each game title
+- `-IncludeTitlePattern <regex>` / `-ExcludeTitlePattern <regex>`: Filter which titles are imported
+- `-NoBackup` (switch): Skip creating a timestamped backup of shortcuts.vdf
+- `-SkipSteamCheck` (switch): Don’t check/close Steam before writing (not recommended)
+- `-ForceCloseSteam` (switch): Allow forced close in non‑interactive mode if Steam is running
+- `-NonInteractive` (switch): Disable menus and run unattended with provided parameters
+- `-DryRun` (switch): Don’t write files; combines well with `-DebugVdf` to preview results
+- `-LogPath <string>`: Write a transcript log to this path
+- `-DebugVdf` (switch): After writing, read back shortcuts.vdf and print a summary
+- `-DebugTitlePattern <regex>`: When debugging, only print entries matching this pattern (default: SimCity)
 
 ## Requirements
 
@@ -72,11 +108,11 @@ Parameters:
 
 ## Notes
 
-- Steam must be restarted to see the new shortcuts
-- Existing non-Steam shortcuts are automatically preserved
-- Database paths are automatically detected
-- Special characters in paths are handled correctly
-- Re-running the script will only add new GOG games, not create duplicates
+- After writing, you’ll be prompted to launch Steam (interactive mode). Otherwise, restart Steam to see new shortcuts
+- Existing non‑Steam shortcuts are preserved and merged intelligently — no duplicates
+- Database and installation paths are auto‑detected in most setups
+- Special characters in titles/paths are handled correctly
+- Re‑running the script is safe; it will only add new games
 - Launch arguments from GOG Galaxy are preserved in Steam shortcuts
 
 ## Changelog
