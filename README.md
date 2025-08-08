@@ -231,3 +231,8 @@ The codebase has been significantly enhanced with better separation of concerns:
 
 Based on analysis of Steam's shortcuts.vdf format and C# reference implementation.
 
+Additional assistance and iteration provided by:
+- Agent Mode (Warp AI terminal) for repo automation, conflict resolution, and scripting assistance
+- Claude Sonnet 4 for UX refinements to the interactive menu and shutdown flow
+- OpenAI GPT-4 for implementation guidance and code review suggestions
+
