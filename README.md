@@ -13,6 +13,13 @@ A PowerShell script that automatically imports your GOG Galaxy games into Steam.
 
 ## Recent Updates
 
+### Version 1.1.1 - August 8, 2025
+- Unified interactive options menu with numeric input and consistent Steam user selection
+- Improved Steam shutdown workflow with escalation and manual close; clean cancel on 'q'
+- Added end-of-run prompt to launch Steam in interactive mode
+- Simplified Steam user labels to numeric IDs (with [MostRecent]) to avoid mislabeling
+- Minor comment cleanup and transcript logging option
+
 ### Version 1.1.0 - August 3, 2025
 - **Enhanced Executable Detection**: Now uses GOG's PlayTasks database with `isPrimary = 1` flag for authoritative executable detection
 - **Existing Shortcuts Preservation**: Added functionality to read and preserve existing Steam shortcuts before adding GOG games
@@ -73,6 +80,20 @@ Parameters:
 - Launch arguments from GOG Galaxy are preserved in Steam shortcuts
 
 ## Changelog
+
+### Version 1.1.1 - August 8, 2025
+#### Added
+- Unified interactive options menu with numeric input
+- End-of-run prompt to launch Steam (interactive mode)
+
+#### Changed
+- Improved Steam shutdown workflow (graceful -> stop -> force -> taskkill -> manual) with clean cancel
+- Simplified Steam user labels to numeric IDs (with [MostRecent])
+- Consistent interactive Steam user selection using the same menu style
+
+#### Fixed
+- Clean cancellation path on manual-close prompt ('q' exits with message and non-zero code)
+- Minor comment cleanup and documentation updates
 
 ### Version 1.1.0 - August 3, 2025
 #### Major Enhancements

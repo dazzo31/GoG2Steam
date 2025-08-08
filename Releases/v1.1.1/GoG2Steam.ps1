@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Auto-add all GOG Galaxy–installed games as "Non-Steam" shortcuts in Steam.
+  Auto-add all GOG Galaxy-installed games as "Non-Steam" shortcuts in Steam.
 
 .DESCRIPTION
   1. Reads GOG Galaxy's SQLite database to find every installed game (title + folder).
@@ -637,7 +637,7 @@ Ensure-SteamNotRunning -SkipCheck:$SkipSteamCheck -ForceClose:$ForceCloseSteam -
 # Preserves existing Steam shortcuts
 $existingShortcuts = @()
 if (Test-Path $shortcutsVdf) {
-    Write-Verbose "Found existing shortcuts.vdf, attempting to read..."
+    Write-Host "Found existing shortcuts.vdf, reading existing shortcuts..." -ForegroundColor Cyan
     $existingShortcuts = Read-ExistingShortcuts -InputFilePath $shortcutsVdf
     Write-Host "Existing shortcuts detected: $($existingShortcuts.Count)" -ForegroundColor Green
 } else {
@@ -645,7 +645,7 @@ if (Test-Path $shortcutsVdf) {
 }
 $existingCount = if ($existingShortcuts) { $existingShortcuts.Count } else { 0 }
 
-# ░░░▐ MAIN WORKFLOW ▌░░░
+# ===[ MAIN WORKFLOW ]===
 
 # Backup existing shortcuts.vdf if requested and present
 if (-not $NoBackup -and (Test-Path $shortcutsVdf)) {
@@ -805,7 +805,8 @@ ORDER BY COALESCE(ld.title, p.name)
         }
     } # End of foreach ($result in $results)
     
-    # Build new shortcuts.vdf with GOG games
+    # Merge GOG games with existing shortcuts (v1.1.0 - Aug 3, 2025)
+    # New intelligent merging system prevents duplicates
     if ($games.Count -gt 0) {
         Write-Host "`nMerging GOG games with existing Steam shortcuts..." -ForegroundColor Cyan
         Write-Host "  New GOG games prepared: $($games.Count)" -ForegroundColor Gray
