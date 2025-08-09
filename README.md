@@ -2,7 +2,7 @@
 
 ## Overview
 
-Bring your entire GOG Galaxy library into Steam in minutes — with zero manual tedium. GoG2Steam scans your GOG installs, finds the right executables (using GOG’s authoritative PlayTasks data), and writes polished, duplicate‑free non‑Steam shortcuts straight into Steam.
+Bring your entire GOG Galaxy library into Steam in minutes. GoG2Steam scans your GOG installs, finds the right executables (using GOG’s authoritative PlayTasks data), and writes polished, duplicate‑free non‑Steam shortcuts straight into Steam.
 
 Why you’ll love it:
 - One‑click import: Automatically discovers every installed GOG game
