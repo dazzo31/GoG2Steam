@@ -1,5 +1,8 @@
 # GoG2Steam - GOG Galaxy to Steam Integration
 
+[![Sponsor on GitHub](https://img.shields.io/badge/Sponsor-GitHub%20Sponsors-ea4aaa?style=flat&logo=githubsponsors&logoColor=white)](https://github.com/sponsors/dazzo31)
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-dazzo31-orange?style=flat&logo=buymeacoffee&logoColor=white)](https://buymeacoffee.com/dazzo31)
+
 ## Overview
 
 Bring your entire GOG Galaxy library into Steam in minutes. GoG2Steam scans your GOG installs, finds the right executables (using GOG’s authoritative PlayTasks data), and writes polished, duplicate‑free non‑Steam shortcuts straight into Steam.
@@ -235,4 +238,13 @@ Additional assistance and iteration provided by:
 - Agent Mode (Warp AI terminal) for repo automation, conflict resolution, and scripting assistance
 - Claude Sonnet 4 for UX refinements to the interactive menu and shutdown flow
 - OpenAI GPT-4 for implementation guidance and code review suggestions
+
+---
+
+## 💖 Support & Sponsorship
+
+If GoG2Steam helped organize your game library or saved you manual setup time, consider supporting ongoing development:
+
+[![Sponsor on GitHub](https://img.shields.io/badge/Sponsor%20on%20GitHub-ea4aaa?style=for-the-badge&logo=githubsponsors&logoColor=white)](https://github.com/sponsors/dazzo31)
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/dazzo31)
 
