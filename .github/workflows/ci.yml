@@ -36,3 +36,9 @@ jobs:
           $env:GOG2STEAM_TEST = '1'
           . ./GoG2Steam.ps1
           Write-Host "GoG2Steam.ps1 dot-sourced successfully without syntax errors." -ForegroundColor Green
+
+      - name: Run Pester Tests
+        shell: pwsh
+        run: |
+          Invoke-Pester -Configuration @{ Run = @{ Path = './tests' }; Output = @{ Verbosity = 'Detailed' } }
+

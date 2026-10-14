@@ -134,22 +134,6 @@ if ($LogPath) {
 
 # ===[ CONFIGURATION ]===
 
-# Validate paths
-if (-not (Test-Path $SteamPath)) {
-    Write-Error "Steam installation not found at: $SteamPath"
-    throw "Steam path not found"
-}
-
-if (-not (Test-Path $GogPath)) {
-    Write-Error "GOG Galaxy installation not found at: $GogPath"
-    throw "GOG Galaxy path not found"
-}
-
-if (-not (Test-Path $GogDb)) {
-    Write-Error "GOG Galaxy database not found at: $GogDb"
-    throw "GOG Galaxy database not found"
-}
-
 # Helper to parse Steam users from loginusers.vdf (with account and persona names when available)
 function Get-SteamUsers {
     param(
@@ -513,7 +497,7 @@ function Show-OptionsMenu {
             Write-Host "   Exit without making any changes." -ForegroundColor DarkGray
             Write-Host "" 
             $inputChoice = Read-Host "Enter choice (1-9) [default 8]"
-            if ([string]::IsNullOrWhiteSpace($inputChoice)) { $inputChoice = '7' }
+            if ([string]::IsNullOrWhiteSpace($inputChoice)) { $inputChoice = '8' }
             $parsed = 0
             if (-not ([int]::TryParse($inputChoice, [ref]$parsed))) {
                 Write-Host "Invalid input. Please enter a number from 1 to 9." -ForegroundColor Yellow
@@ -576,6 +560,22 @@ function Show-OptionsMenu {
 
 # In test mode, stop execution after defining functions to allow Pester to dot-source without running
 if ($env:GOG2STEAM_TEST -eq '1') { return }
+
+# Validate paths
+if (-not (Test-Path $SteamPath)) {
+    Write-Error "Steam installation not found at: $SteamPath"
+    throw "Steam path not found"
+}
+
+if (-not (Test-Path $GogPath)) {
+    Write-Error "GOG Galaxy installation not found at: $GogPath"
+    throw "GOG Galaxy path not found"
+}
+
+if (-not (Test-Path $GogDb)) {
+    Write-Error "GOG Galaxy database not found at: $GogDb"
+    throw "GOG Galaxy database not found"
+}
 
 # Show interactive options unless in non-interactive mode
 if (-not $NonInteractive) {

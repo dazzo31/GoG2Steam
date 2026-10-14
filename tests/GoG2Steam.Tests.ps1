@@ -32,9 +32,9 @@ Describe 'GoG2Steam interactive menu' {
   }
 
   It 'selects a Steam user via numeric menu' {
-    # Inputs: 1) choose "Select user", then "2" to pick Beta, then "7" to Proceed
+    # Inputs: 1) choose "Select user", then "2" to pick Beta, then "8" to Proceed
     $inputs = [System.Collections.Generic.Queue[string]]::new()
-    @('1','2','7') | ForEach-Object { $inputs.Enqueue($_) }
+    @('1','2','8') | ForEach-Object { $inputs.Enqueue($_) }
     Mock -CommandName Read-Host -MockWith { param($Prompt) $inputs.Dequeue() }
 
     Show-OptionsMenu -SteamRoot 'C:\\Steam'
@@ -44,9 +44,9 @@ Describe 'GoG2Steam interactive menu' {
   }
 
   It 'toggles backup and debug, then proceeds' {
-    # Inputs: '5' toggle Backup, '6' toggle Debug, '7' Proceed
+    # Inputs: '6' toggle Backup, '7' toggle Debug, '8' Proceed
     $inputs = [System.Collections.Generic.Queue[string]]::new()
-    @('5','6','7') | ForEach-Object { $inputs.Enqueue($_) }
+    @('6','7','8') | ForEach-Object { $inputs.Enqueue($_) }
     Mock -CommandName Read-Host -MockWith { param($Prompt) $inputs.Dequeue() }
 
     Show-OptionsMenu -SteamRoot 'C:\\Steam'
@@ -60,11 +60,11 @@ Describe 'GoG2Steam interactive menu' {
   It 'sets include/exclude and prefix, then proceeds' {
     # Sequence:
     # 2 -> Name Prefix -> "[GOG] "
-    # 3 -> Include -> "^Sim"
-    # 4 -> Exclude -> "Beta"
-    # 7 -> Proceed
+    # 4 -> Include -> "^Sim"
+    # 5 -> Exclude -> "Beta"
+    # 8 -> Proceed
     $inputs = [System.Collections.Generic.Queue[string]]::new()
-    @('2','[GOG] ','3','^Sim','4','Beta','7') | ForEach-Object { $inputs.Enqueue($_) }
+    @('2','[GOG] ','4','^Sim','5','Beta','8') | ForEach-Object { $inputs.Enqueue($_) }
     Mock -CommandName Read-Host -MockWith { param($Prompt) $inputs.Dequeue() }
 
     Show-OptionsMenu -SteamRoot 'C:\\Steam'
@@ -102,22 +102,22 @@ Describe 'GoG2Steam interactive menu' {
   }
 
   It 'menu handles invalid non-numeric input then proceeds on next input' {
-    # 'abc' invalid, then default proceed '7'
+    # 'abc' invalid, then default proceed '8'
     $inputs = [System.Collections.Generic.Queue[string]]::new()
-    @('abc','7') | ForEach-Object { $inputs.Enqueue($_) }
+    @('abc','8') | ForEach-Object { $inputs.Enqueue($_) }
     Mock -CommandName Read-Host -MockWith { param($Prompt) $inputs.Dequeue() }
     { Show-OptionsMenu -SteamRoot 'C:\\Steam' } | Should -Not -Throw
   }
 
   It 'menu handles out-of-range input then proceeds' {
-    # '9' out of range, then '7' proceed
+    # '99' out of range, then '8' proceed
     $inputs = [System.Collections.Generic.Queue[string]]::new()
-    @('9','7') | ForEach-Object { $inputs.Enqueue($_) }
+    @('99','8') | ForEach-Object { $inputs.Enqueue($_) }
     Mock -CommandName Read-Host -MockWith { param($Prompt) $inputs.Dequeue() }
     { Show-OptionsMenu -SteamRoot 'C:\\Steam' } | Should -Not -Throw
   }
 
-  It 'menu proceeds immediately on blank input (default 7)' {
+  It 'menu proceeds immediately on blank input (default 8)' {
     $inputs = [System.Collections.Generic.Queue[string]]::new()
     @('') | ForEach-Object { $inputs.Enqueue($_) }
     Mock -CommandName Read-Host -MockWith { param($Prompt) $inputs.Dequeue() }
@@ -128,7 +128,7 @@ Describe 'GoG2Steam interactive menu' {
     # Override Get-SteamUsers to return empty
     Mock -CommandName Get-SteamUsers -MockWith { @() } -Verifiable -ParameterFilter { $true }
     $inputs = [System.Collections.Generic.Queue[string]]::new()
-    @('1','7') | ForEach-Object { $inputs.Enqueue($_) }
+    @('1','8') | ForEach-Object { $inputs.Enqueue($_) }
     Mock -CommandName Read-Host -MockWith { param($Prompt) $inputs.Dequeue() }
     Show-OptionsMenu -SteamRoot 'C:\\Steam'
     $script:SteamUserId | Should -Be $null
