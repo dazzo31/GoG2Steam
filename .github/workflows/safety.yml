@@ -7,11 +7,11 @@ permissions:
 jobs:
   safety:
     runs-on: windows-latest
-    strategy:
-      matrix:
-        shell: [powershell, pwsh]
     steps:
       - uses: actions/checkout@v4
-      - name: Run safety regression suite
-        shell: ${{ matrix.shell }}
+      - name: Windows PowerShell 5.1 safety regression suite
+        shell: powershell
+        run: ./tests/Safety.Tests.ps1
+      - name: PowerShell 7 safety regression suite
+        shell: pwsh
         run: ./tests/Safety.Tests.ps1
