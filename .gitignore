@@ -1,0 +1,26 @@
+# PowerShell & Transcripts
+*.log
+transcript.txt
+*.transcript
+
+# Steam VDF Backups & Temporary files
+*.vdf.bak
+*.vdf.backup*
+temp-*.vdf
+
+# Release Archives (built assets should be attached to GitHub Releases)
+Releases/*.zip
+*.zip
+
+# Operating System Files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+
+# Editor & IDE Directories
+.vscode/
+.idea/
+*.suo
+*.user

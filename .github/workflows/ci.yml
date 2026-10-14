@@ -1,0 +1,38 @@
+name: CI & Code Quality
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  lint:
+    name: Lint PowerShell Scripts
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Run PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          Install-Module -Name PSScriptAnalyzer -Scope CurrentUser -Force
+          $results = Invoke-ScriptAnalyzer -Path ./ -Recurse -Severity Error, Warning
+          if ($results) {
+            $results | Format-Table -AutoSize
+            $errors = $results | Where-Object { $_.Severity -eq 'Error' }
+            if ($errors) {
+              throw "$($errors.Count) critical PSScriptAnalyzer error(s) found."
+            }
+          } else {
+            Write-Host "PSScriptAnalyzer passed with 0 errors or warnings." -ForegroundColor Green
+          }
+
+      - name: Syntax & Dot-Source Validation
+        shell: pwsh
+        run: |
+          $env:GOG2STEAM_TEST = '1'
+          . ./GoG2Steam.ps1
+          Write-Host "GoG2Steam.ps1 dot-sourced successfully without syntax errors." -ForegroundColor Green

@@ -2,6 +2,9 @@
 
 [![Sponsor on GitHub](https://img.shields.io/badge/Sponsor-GitHub%20Sponsors-ea4aaa?style=flat&logo=githubsponsors&logoColor=white)](https://github.com/sponsors/dazzo31)
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-dazzo31-orange?style=flat&logo=buymeacoffee&logoColor=white)](https://buymeacoffee.com/dazzo31)
+[![CI](https://github.com/dazzo31/GoG2Steam/actions/workflows/ci.yml/badge.svg)](https://github.com/dazzo31/GoG2Steam/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![PowerShell](https://img.shields.io/badge/PowerShell-5.1%20%7C%207%2B-blue.svg)](https://microsoft.com/powershell)
 
 ## Overview
 
@@ -229,6 +232,10 @@ The codebase has been significantly enhanced with better separation of concerns:
 - Handles empty strings and binary data properly
 - Preserves exact byte sequence required by Steam
 - Generated files can be read by Steam client
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Credits
 
