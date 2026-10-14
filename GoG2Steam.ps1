@@ -123,7 +123,7 @@ if ($DryRun) { $WhatIfPreference = $true }
 
 # Optional logging to a transcript file
 $transcriptStarted = $false
-if ($LogPath) {
+if ($LogPath -and -not $WhatIfPreference) {
     try {
         Start-Transcript -Path $LogPath -Append -ErrorAction Stop | Out-Null
         $transcriptStarted = $true
@@ -282,8 +282,6 @@ function Assert-SteamNotRunning {
         [switch]$ForceClose,
         [switch]$NonInteractive
     )
-    # Reference ForceClose to satisfy analyzer if not used directly in flow logic
-    $null = $ForceClose.IsPresent
     if ($SkipCheck) { return }
     try {
         $procList = @(Get-Process -Name steam -ErrorAction SilentlyContinue)
@@ -292,6 +290,9 @@ function Assert-SteamNotRunning {
         Write-Warning "Steam appears to be running. It's recommended to close it before writing shortcuts.vdf."
 
         if ($NonInteractive) {
+            if (-not $ForceClose) {
+                throw 'Steam is running. Close it manually or explicitly use -ForceCloseSteam.'
+            }
             # In non-interactive mode, attempt graceful close then escalate to forceful methods if needed
             try {
                 Write-Host "NonInteractive: attempting to close Steam..." -ForegroundColor Yellow
@@ -316,7 +317,10 @@ function Assert-SteamNotRunning {
                     Start-Sleep -Seconds 3
                 }
             } catch {
-                Write-Warning "Attempt to close Steam failed (continuing non-interactively): $_"
+                throw "Attempt to close Steam failed: $_"
+            }
+            if (@(Get-Process -Name steam -ErrorAction SilentlyContinue).Count -gt 0) {
+                throw 'Steam is still running; shortcuts were not modified.'
             }
             return
         }
@@ -649,14 +653,16 @@ $shortcutsVdf = Join-Path $configPath "shortcuts.vdf"
 Write-Verbose "Using shortcuts.vdf at: $shortcutsVdf"
 
 # Ensure Steam is not running (or user confirmed proceeding)
-Assert-SteamNotRunning -SkipCheck:$SkipSteamCheck -ForceClose:$ForceCloseSteam -NonInteractive:$NonInteractive
+if (-not $WhatIfPreference) {
+    Assert-SteamNotRunning -SkipCheck:$SkipSteamCheck -ForceClose:$ForceCloseSteam -NonInteractive:$NonInteractive
+}
 
 # Read existing shortcuts before making any changes
 # Preserves existing Steam shortcuts
 $existingShortcuts = @()
 if (Test-Path $shortcutsVdf) {
     Write-Verbose "Found existing shortcuts.vdf, attempting to read..."
-    $existingShortcuts = Read-ExistingShortcuts -InputFilePath $shortcutsVdf
+    $existingShortcuts = @(Read-ExistingShortcuts -InputFilePath $shortcutsVdf)
     Write-Host "Existing shortcuts detected: $($existingShortcuts.Count)" -ForegroundColor Green
 } else {
     Write-Host "No existing shortcuts.vdf detected; a new one will be created" -ForegroundColor Yellow
@@ -673,8 +679,7 @@ if (-not $NoBackup -and (Test-Path $shortcutsVdf)) {
             Copy-Item -LiteralPath $shortcutsVdf -Destination $backupPath -ErrorAction Stop
             Write-Host "Backed up existing shortcuts.vdf to: $backupPath" -ForegroundColor Green
         } catch {
-            Write-Warning "Failed to backup shortcuts.vdf: $_"
-            Write-Warning "Continuing without backup..."
+            throw "Backup failed; shortcuts were not modified: $_"
         }
     }
 } else {
@@ -684,7 +689,7 @@ if (-not $NoBackup -and (Test-Path $shortcutsVdf)) {
 
 try {
     # Initialize SQLite connection using the new function
-    $connection = Initialize-SQLiteConnection -GogGalaxyDb $GogDb
+    $connection = Initialize-SQLiteConnection -GogGalaxyDb $GogDb -NoInstall:$WhatIfPreference
     
 # Query for installed games using PlayTasks integration
 # Uses GOG's authoritative PlayTasks data with isPrimary=1 flag
@@ -834,7 +839,7 @@ ORDER BY COALESCE(ld.title, p.name)
         if ($existingShortcuts -and ($existingShortcuts.Count -gt 0)) {
             $mergeParams["ExistingShortcuts"] = $existingShortcuts
         }
-        $mergedEntries = Merge-GameShortcuts @mergeParams
+        $mergedEntries = @(Merge-GameShortcuts @mergeParams)
 
         # Show a concise list of what will be written
         Write-Host "\nWill write the following shortcuts:" -ForegroundColor Cyan
@@ -844,6 +849,9 @@ ORDER BY COALESCE(ld.title, p.name)
         
         try {
             if ($PSCmdlet.ShouldProcess($shortcutsVdf, "Write merged shortcuts ($($mergedEntries.Count))")) {
+                if (-not $SkipSteamCheck -and @(Get-Process -Name steam -ErrorAction SilentlyContinue).Count -gt 0) {
+                    throw 'Steam restarted before writing; shortcuts were not modified.'
+                }
                 $result = Build-ShortcutsVdf -Entries $mergedEntries -OutputFilePath $shortcutsVdf
                 if ($result) {
                     Write-Host "Successfully wrote $($mergedEntries.Count) total shortcuts to shortcuts.vdf" -ForegroundColor Green
@@ -853,7 +861,7 @@ ORDER BY COALESCE(ld.title, p.name)
 
                     if ($DebugVdf) {
                         Write-Host "\n[Debug] Reading back shortcuts.vdf to verify entries..." -ForegroundColor Magenta
-                        $parsed = Read-ExistingShortcuts -InputFilePath $shortcutsVdf
+                        $parsed = @(Read-ExistingShortcuts -InputFilePath $shortcutsVdf)
                         Write-Host ("[Debug] Parsed entries: {0}" -f $parsed.Count) -ForegroundColor Magenta
                         if ($DebugTitlePattern) {
                             $debugMatches = $parsed | Where-Object { $_.Name -match $DebugTitlePattern }
@@ -895,8 +903,8 @@ ORDER BY COALESCE(ld.title, p.name)
     Write-Host ("Discovered: {0}, Prepared: {1}, Skipped (no exe): {2}" -f $discovered, $games.Count, $skippedNoExe) -ForegroundColor Cyan
     Write-Host ("Target shortcuts file: {0}" -f $shortcutsVdf) -ForegroundColor Gray
 
-    # Offer to relaunch Steam
-    if (-not $NonInteractive) {
+    # Offer to relaunch Steam only after a real run.
+    if (-not $NonInteractive -and -not $WhatIfPreference) {
         $steamExe = Join-Path $SteamPath 'steam.exe'
         $canLaunch = Test-Path -LiteralPath $steamExe -PathType Leaf
         $prompt = if ($canLaunch) { "Launch Steam now? [Y/n]" } else { "Press Enter to exit." }

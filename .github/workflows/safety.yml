@@ -1,0 +1,17 @@
+name: Shortcut safety
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  safety:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        shell: [powershell, pwsh]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run safety regression suite
+        shell: ${{ matrix.shell }}
+        run: ./tests/Safety.Tests.ps1

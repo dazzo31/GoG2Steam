@@ -18,6 +18,39 @@ Why you’ll love it:
 
 Make Steam your single launcher — keep friends, overlays, controller configs, and playtime tracking in one place.
 
+## Safety improvements (unreleased)
+
+Use the source files at the repository root for these changes. The archives under
+`Releases/` are older releases and do not include this patch.
+
+- Existing shortcut records are preserved byte-for-byte, including AppIDs, custom
+  icons, tags, launch arguments, working directories and other settings.
+- Malformed or unsupported VDF input stops the import instead of being treated as
+  an empty library. Keep your original file when reporting an unsupported format.
+- Duplicate detection compares executable paths (case-insensitive) and launch
+  arguments (case-sensitive). Existing names and settings remain unchanged;
+  different games with the same name or shared launcher can coexist.
+- Output is written to a temporary file in the destination directory, parsed for
+  validation, then atomically replaces the destination. Failed validation leaves
+  the destination unchanged. Failure to create a requested backup stops the run.
+- Unattended runs refuse to close Steam unless `-ForceCloseSteam` is supplied,
+  and stop if Steam remains running. Steam is checked again before writing.
+- Dry runs skip Steam shutdown/relaunch, transcript creation and dependency
+  installation. Install the SQLite dependency before previewing an import.
+
+Run the standalone safety regression suite without Steam or GOG installed:
+
+```powershell
+powershell.exe -NoProfile -File .\tests\Safety.Tests.ps1
+# Or PowerShell 7:
+pwsh -NoProfile -File ./tests/Safety.Tests.ps1
+```
+
+The suite checks binary preservation, corrupt input, safe replacement, duplicate
+identity and the unattended process guard. Windows CI runs it on both PowerShell
+5.1 and 7. A real Windows/GOG/Steam import still needs manual verification before
+publishing a release.
+
 ## Recent Updates
 
 ### Version 1.1.1 - August 8, 2025
@@ -171,7 +204,7 @@ A PowerShell module that generates Steam's non-Steam game shortcuts in the binar
 The script implements Steam's binary VDF format for shortcuts:
 
 - String values (0x01): Written as UTF-8 with null terminator
-- Binary values (0x02): Written with length prefix and null terminator
+- Integer values (0x02): Four-byte little-endian values, without a length prefix or null terminator
 - Maps: Marked with 0x00 start and 0x08 end bytes
 - Special fields: "hidden" as binary, "tags" as nested map
 - Fields ordered as per Steam's expectations
@@ -210,7 +243,7 @@ Use test-vdf.ps1 to verify correct binary output:
 
 The codebase has been significantly enhanced with better separation of concerns:
 
-1. **DatabaseFunctions.ps1**: Enhanced with PlayTasks queries and existing shortcuts reading
+1. **DatabaseFunctions.ps1**: SQLite connection and query helpers
 2. **ExecutableValidation.ps1**: Added authoritative validation bypass for GOG-verified executables  
 3. **StringProcessing.ps1**: Simplified Unicode handling for better cross-platform compatibility
 4. **VdfGeneration.ps1**: Comprehensive rewrite with merging and duplicate detection capabilities
