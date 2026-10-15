@@ -21,10 +21,7 @@ Why you’ll love it:
 
 Make Steam your single launcher — keep friends, overlays, controller configs, and playtime tracking in one place.
 
-## Safety improvements (unreleased)
-
-Use the source files at the repository root for these changes. The archives under
-`Releases/` are older releases and do not include this patch.
+## Safety & Data Preservation (v1.2.0)
 
 - Existing shortcut records are preserved byte-for-byte, including AppIDs, custom
   icons, tags, launch arguments, working directories and other settings.
@@ -54,6 +51,14 @@ identity and the unattended process guard. Windows CI runs it on both PowerShell
 5.1 and 7.
 
 ## Recent Updates
+
+### Version 1.2.0 - October 15, 2026
+- Byte-for-byte preservation of existing `shortcuts.vdf` records (non-EXE shortcuts, tags, icons, Unicode)
+- Safe atomic file replacement with temporary staging and backup validation
+- Steam process guard re-verified prior to write to avoid Steam Cloud overwrite conflicts
+- Explicit `-ForceCloseSteam` required in unattended mode; stops if closure fails
+- Dry-run mode skips process changes, transcripts, and dependency installation
+- Standalone safety regression test suite (PowerShell 5.1 and 7)
 
 ### Version 1.1.1 - August 8, 2025
 - Unified interactive options menu with numeric input and consistent Steam user selection
@@ -154,6 +159,22 @@ All parameters:
 - Launch arguments from GOG Galaxy are preserved in Steam shortcuts
 
 ## Changelog
+
+### Version 1.2.0 - October 15, 2026
+#### Added
+- Byte-for-byte preservation of existing `shortcuts.vdf` records, including non-EXE shortcuts, AppIDs, custom icons, tags, launch arguments, and Unicode names
+- Standalone safety regression test suite (`tests/Safety.Tests.ps1`) covering binary preservation, corrupt input rejection, atomic replacement, and process safety
+- Windows CI workflow testing both Windows PowerShell 5.1 and PowerShell 7+
+
+#### Changed
+- Output is written to a temporary file, validated by parsing, and then atomically replaces the destination
+- Duplicate detection now matches by executable path and launch arguments, preserving existing custom configurations
+- Unattended mode requires explicit `-ForceCloseSteam` consent and halts execution if Steam remains active
+- Steam process status is re-verified immediately prior to file replacement to prevent Steam Cloud overwrite conflicts
+- Dry runs skip Steam process shutdown/relaunch, transcript logging, and dependency installation
+
+#### Removed
+- Removed duplicate and incomplete VDF reader implementation in favor of recursive typed VDF map parser (`Read-VdfMap`)
 
 ### Version 1.1.1 - August 8, 2025
 #### Added

@@ -1,0 +1,345 @@
+﻿# VdfGeneration.ps1
+# Functions for Steam shortcuts.vdf file generation
+# Updated: August 3, 2025 - Added comprehensive VDF reading, existing shortcuts preservation, and intelligent merging
+
+# Parse the actual typed structure; never guess record boundaries from byte patterns.
+# Keep each record's original payload so fields we do not edit survive byte-for-byte.
+function Read-VdfCString {
+    param([byte[]]$Data, [ref]$Position)
+    $start = $Position.Value
+    while ($Position.Value -lt $Data.Length -and $Data[$Position.Value] -ne 0) {
+        $Position.Value++
+    }
+    if ($Position.Value -ge $Data.Length) { throw 'Unterminated VDF string.' }
+    $utf8 = New-Object System.Text.UTF8Encoding($false, $true)
+    $value = $utf8.GetString($Data, $start, $Position.Value - $start)
+    $Position.Value++
+    return $value
+}
+
+function Read-VdfMap {
+    param([byte[]]$Data, [ref]$Position, [int]$Depth = 0)
+    if ($Depth -gt 64) { throw 'VDF nesting limit exceeded.' }
+    $fields = @{}
+    while ($Position.Value -lt $Data.Length) {
+        $type = $Data[$Position.Value]
+        $Position.Value++
+        if ($type -eq 8) { return $fields }
+        $key = Read-VdfCString -Data $Data -Position $Position
+        if ($fields.ContainsKey($key)) { throw "Duplicate VDF field: $key" }
+        switch ($type) {
+            0 { $fields[$key] = Read-VdfMap -Data $Data -Position $Position -Depth ($Depth + 1) }
+            1 { $fields[$key] = Read-VdfCString -Data $Data -Position $Position }
+            { $_ -in 2, 3, 4, 6, 7, 10 } {
+                $size = if ($type -in 7, 10) { 8 } else { 4 }
+                if ($Position.Value + $size -gt $Data.Length) { throw 'Truncated VDF numeric field.' }
+                $fields[$key] = $Data[$Position.Value..($Position.Value + $size - 1)]
+                $Position.Value += $size
+            }
+            default { throw "Unsupported VDF type $type; original file was not modified." }
+        }
+    }
+    throw 'Unterminated VDF map.'
+}
+
+function Read-ExistingShortcuts {
+    param([Parameter(Mandatory=$true)][string]$InputFilePath)
+    if (-not (Test-Path -LiteralPath $InputFilePath)) { return @() }
+    $data = [System.IO.File]::ReadAllBytes($InputFilePath)
+    $pos = 0
+    if ($data.Length -lt 12 -or $data[$pos] -ne 0) { throw 'Invalid VDF root.' }
+    $pos++
+    if ((Read-VdfCString -Data $data -Position ([ref]$pos)) -cne 'shortcuts') {
+        throw 'Expected shortcuts VDF root.'
+    }
+    $entries = @()
+    $indices = @{}
+    while ($pos -lt $data.Length -and $data[$pos] -ne 8) {
+        if ($data[$pos] -ne 0) { throw 'Expected shortcut map.' }
+        $pos++
+        $index = Read-VdfCString -Data $data -Position ([ref]$pos)
+        if ($index -notmatch '^\d+$' -or $indices.ContainsKey($index)) { throw 'Invalid shortcut index.' }
+        $indices[$index] = $true
+        $start = $pos
+        $fields = Read-VdfMap -Data $data -Position ([ref]$pos)
+        $entries += @{
+            Name = [string]$fields['appname']
+            ExePath = ([string]$fields['exe']).Trim('"')
+            StartDir = ([string]$fields['StartDir']).Trim('"')
+            LaunchOptions = [string]$fields['LaunchOptions']
+            RawPayload = [byte[]]$data[$start..($pos - 1)]
+        }
+    }
+    if ($pos -ge $data.Length) { throw 'Missing shortcuts map terminator.' }
+    $pos++
+    # Steam files may have one additional outer terminator.
+    if ($pos -lt $data.Length -and $data[$pos] -eq 8) { $pos++ }
+    if ($pos -ne $data.Length) { throw 'Unexpected trailing VDF data.' }
+    return $entries
+}
+
+# Function to check if a game already exists in shortcuts
+function Test-GameExists {
+    param (
+        [Parameter(Mandatory=$true)]
+        [AllowEmptyCollection()]
+        [array]$ExistingShortcuts,
+
+        [Parameter(Mandatory=$true)]
+        [string]$GamePath,
+
+        [Parameter(Mandatory=$true)]
+        [string]$GameName
+    )
+
+    foreach ($existing in $ExistingShortcuts) {
+        # Check if executable path matches (case-insensitive)
+        if ($existing.ExePath -and ($existing.ExePath -ieq $GamePath)) {
+            return $true
+        }
+
+        # Also check if the game name is very similar (to catch renamed executables)
+        if ($existing.Name -and ($existing.Name -ieq $GameName)) {
+            return $true
+        }
+    }
+
+    return $false
+}
+
+# Function to merge GOG games with existing shortcuts, avoiding duplicates
+function Merge-GameShortcuts {
+    param (
+        [Parameter(Mandatory=$true)]
+        [array]$NewGogGames,
+
+        [Parameter(Mandatory=$false)]
+        [array]$ExistingShortcuts = @()
+    )
+
+    $mergedShortcuts = @($ExistingShortcuts)
+    $addedCount = 0
+    $skippedCount = 0
+    foreach ($gogGame in $NewGogGames) {
+        # Shared launchers can run different games via arguments. Names alone are
+        # not identity, and existing user settings must not be overwritten.
+        $match = $mergedShortcuts | Where-Object {
+            $_.ExePath -and
+            ($_.ExePath.Trim('"') -ieq $gogGame.Path.Trim('"')) -and
+            ([string]$_.LaunchOptions -ceq [string]$gogGame.LaunchOptions)
+        } | Select-Object -First 1
+        if ($match) {
+            $skippedCount++
+        } else {
+            $mergedShortcuts += @{
+                Name = $gogGame.Title
+                ExePath = $gogGame.Path
+                StartDir = $gogGame.StartDir
+                LaunchOptions = $gogGame.LaunchOptions
+            }
+            $addedCount++
+        }
+    }
+    Write-Host "Merged shortcuts: $addedCount added, $skippedCount unchanged" -ForegroundColor Cyan
+    return $mergedShortcuts
+}
+
+# Helper function to write strings to VDF format
+function Write-VdfString {
+    param (
+        [Parameter(Mandatory=$true)]
+        [System.Collections.Generic.List[byte]]$bytes,
+
+        [Parameter(Mandatory=$true)]
+        [AllowEmptyString()]
+        [string]$value,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$addQuotes
+    )
+
+    # Handle empty strings and null values
+    if ([string]::IsNullOrEmpty($value)) {
+        $bytes.Add(0x00)  # Just add null terminator for empty strings
+        return
+    }
+
+    # Add quotes if requested
+    if ($addQuotes) {
+        $value = '"' + $value + '"'
+    }
+
+    # Convert string to bytes and add null terminator
+    $stringBytes = [System.Text.Encoding]::UTF8.GetBytes($value)
+    $bytes.AddRange($stringBytes)
+    $bytes.Add(0x00)  # Null terminator
+}
+
+# Helper function to compute SHA1 hash of a string
+function Get-SHA1Hash {
+    param([string]$value)
+    $data = [System.Text.Encoding]::ASCII.GetBytes($value)
+    $sha1 = [System.Security.Cryptography.SHA1]::Create()
+    try {
+        $hashBytes = $sha1.ComputeHash($data)
+        return -join ($hashBytes | ForEach-Object { $_.ToString("X2") })
+    }
+    finally {
+        $sha1.Dispose()
+    }
+}
+
+# Function to generate appid based on executable path
+function Get-AppId {
+    param([string]$exePath)
+
+    # Get SHA1 hash of the exe path
+    $hash = Get-SHA1Hash -value $exePath
+
+    # Convert hash to numeric value (CRC)
+    $crcValue = [uint32]("0x" + $hash.Substring(0, 8))
+    Write-Verbose "Initial CRC value: $([BitConverter]::ToString([BitConverter]::GetBytes($crcValue)))"
+
+    # Create duplicated 64-bit value with high bit set in lower 32 bits
+    $modifiedCrc = $crcValue -bor 0x80000000
+    $longValue = ([uint64]$crcValue -shl 32) -bor [uint64]$modifiedCrc
+    Write-Verbose "After CRC duplication and high bit: $([BitConverter]::ToString([BitConverter]::GetBytes($longValue)))"
+
+    # Shift entire value left 32 bits
+    $longValue = $longValue -shl 32
+    Write-Verbose "After shift left 32: $([BitConverter]::ToString([BitConverter]::GetBytes($longValue)))"
+
+    # Set bit 25 in result
+    $longValue = $longValue -bor 0x02000000
+    Write-Verbose "After setting bit 25: $([BitConverter]::ToString([BitConverter]::GetBytes($longValue)))"
+
+    # Convert to bytes
+    $allBytes = [BitConverter]::GetBytes($longValue)
+    Write-Verbose "All bytes: $([BitConverter]::ToString($allBytes))"
+
+    # Create final 4-byte result
+    $resultBytes = [byte[]]::new(4)
+    [Array]::Copy($allBytes, 4, $resultBytes, 0, 3)  # Take 3 bytes from position 4
+    $resultBytes[3] = 0x01                           # Set last byte to 0x01
+
+    Write-Verbose "Final bytes: $([BitConverter]::ToString($resultBytes))"
+
+    return $resultBytes
+}
+
+function Build-ShortcutsVdf {
+    param (
+        [Parameter(Mandatory=$true)]
+        [AllowEmptyCollection()]
+        [array]$Entries,
+
+        [Parameter(Mandatory=$true)]
+        [string]$OutputFilePath
+    )
+
+    $tempPath = $null
+    try {
+        $OutputFilePath = [System.IO.Path]::GetFullPath($OutputFilePath)
+        # Create output directory if needed
+        $outputDir = Split-Path -Parent $OutputFilePath
+        if (-not (Test-Path $outputDir)) {
+            New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
+        }
+
+        # Initialize byte list for binary data
+        $bytes = New-Object System.Collections.Generic.List[byte]
+
+        # Write root map header
+        $bytes.Add(0x00)  # Type marker
+        Write-VdfString -bytes $bytes -value "shortcuts"
+
+        # Process each game entry
+        [int]$idx = 0
+        foreach ($entry in $Entries) {
+            # Start entry's map
+            $bytes.Add(0x00)
+            Write-VdfString -bytes $bytes -value $idx.ToString()
+
+            if ($entry.ContainsKey('RawPayload')) {
+                $bytes.AddRange([byte[]]$entry.RawPayload)
+                $idx++
+                continue
+            }
+
+            # Legacy writer (proven working): no appid field, minimal standard fields in exact order
+            $bytes.Add(0x01)  # String type
+            Write-VdfString -bytes $bytes -value "appname"
+            Write-VdfString -bytes $bytes -value $entry.Name
+
+            $bytes.Add(0x01)  # String type
+            Write-VdfString -bytes $bytes -value "exe"
+            Write-VdfString -bytes $bytes -value $entry.ExePath -addQuotes
+
+            $bytes.Add(0x01)  # String type
+            Write-VdfString -bytes $bytes -value "StartDir"
+            Write-VdfString -bytes $bytes -value $entry.StartDir -addQuotes
+
+            $bytes.Add(0x01)  # String type
+            Write-VdfString -bytes $bytes -value "icon"
+            Write-VdfString -bytes $bytes -value ""
+
+            $bytes.Add(0x01)  # String type
+            Write-VdfString -bytes $bytes -value "ShortcutPath"
+            Write-VdfString -bytes $bytes -value ""
+
+            $bytes.Add(0x01)  # String type
+            Write-VdfString -bytes $bytes -value "LaunchOptions"
+            $launchOptions = if ($entry.LaunchOptions) { $entry.LaunchOptions } else { "" }
+            Write-VdfString -bytes $bytes -value $launchOptions
+
+            # Write hidden field (legacy)
+            $bytes.Add(0x02)  # Int32
+            Write-VdfString -bytes $bytes -value "hidden"
+            $bytes.AddRange([byte[]]@(0x00, 0x00, 0x00, 0x00))
+
+            # Write tags section
+            $bytes.Add(0x00)  # Start tags
+            Write-VdfString -bytes $bytes -value "tags"
+
+            $bytes.Add(0x01)  # String type
+            Write-VdfString -bytes $bytes -value "0"
+            Write-VdfString -bytes $bytes -value "GOG"
+
+            $bytes.Add(0x01)  # String type
+            Write-VdfString -bytes $bytes -value "1"
+            Write-VdfString -bytes $bytes -value "GOG Galaxy"
+
+            # Close tags and entry
+            $bytes.Add(0x08)  # Close tags
+            $bytes.Add(0x08)  # Close entry
+
+            $idx++
+        }
+
+        # Close root map
+        $bytes.Add(0x08)
+        $bytes.Add(0x08)
+
+        # Write binary file
+        $tempPath = Join-Path $outputDir ('.shortcuts.' + [guid]::NewGuid().ToString('N') + '.tmp')
+        [System.IO.File]::WriteAllBytes($tempPath, $bytes.ToArray())
+        $verified = @(Read-ExistingShortcuts -InputFilePath $tempPath)
+        if ($verified.Count -ne $Entries.Count) { throw 'VDF verification count mismatch.' }
+        if ([System.IO.File]::Exists($OutputFilePath)) {
+            [System.IO.File]::Replace($tempPath, $OutputFilePath, [NullString]::Value)
+        } else {
+            [System.IO.File]::Move($tempPath, $OutputFilePath)
+        }
+        Write-Host "Successfully wrote shortcuts.vdf with correct binary format." -ForegroundColor Green
+        return $true
+    }
+    catch {
+        Write-Error -Message "Error building shortcuts.vdf: $_"
+        return $false
+    }
+    finally {
+        if ($tempPath -and [System.IO.File]::Exists($tempPath)) {
+            [System.IO.File]::Delete($tempPath)
+        }
+    }
+}

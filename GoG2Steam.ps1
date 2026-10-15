@@ -9,7 +9,7 @@
   4. Builds a brand-new shortcuts.vdf (binary) containing all GOG games.
 
 .VERSION
-  GoG2Steam v1.1.1 (2025-08-08)
+  GoG2Steam v1.2.0 (2026-10-15)
 
 .NOTES
   - Uses DatabaseFunctions.ps1 for SQLite database operations
@@ -20,6 +20,14 @@
   - PowerShell 5.1+ recommended
 
 .CHANGELOG (summary)
+  Version 1.2.0 - October 15, 2026:
+  - Preserves complete existing VDF shortcut records byte-for-byte (non-EXE shortcuts, tags, icons, Unicode)
+  - Validates temporary output before atomic destination replacement; aborts on backup failure
+  - Enforces explicit -ForceCloseSteam in unattended mode and halts if Steam remains running
+  - Steam process guard re-checked immediately before writing
+  - Dry-run mode skips process changes, transcripts, and dependency installation
+  - Standalone safety regression test suite (PowerShell 5.1 and 7)
+
   Version 1.1.1 - August 8, 2025:
   - Added unified interactive options menu (numeric input) and consistent Steam user selection
   - Improved Steam shutdown workflow with escalation and manual close loop; clean cancel on 'q'
