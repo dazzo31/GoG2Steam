@@ -21,7 +21,8 @@ function Initialize-SQLiteConnection {
     #>
     [CmdletBinding()]
     param(
-        [string]$GogGalaxyDb = "$env:ProgramData\GOG.com\Galaxy\storage\galaxy-2.0.db"
+        [string]$GogGalaxyDb = "$env:ProgramData\GOG.com\Galaxy\storage\galaxy-2.0.db",
+        [switch]$NoInstall
     )
 
     try {
@@ -52,6 +53,7 @@ function Initialize-SQLiteConnection {
             $sqlitePackageInstalled = Get-Package -Name System.Data.SQLite.Core -ErrorAction SilentlyContinue
 
             if (-not $sqlitePackageInstalled) {
+                if ($NoInstall) { throw 'SQLite dependency is missing. Install it before running a dry run.' }
                 Write-Host "System.Data.SQLite package not found. Installing..." -ForegroundColor Yellow
                 try {
                     # Ensure NuGet provider is available
@@ -248,106 +250,5 @@ function Get-InstallationPath {
     }
     
     return $null
-}
-
-function Read-ExistingShortcuts {
-    param(
-        [Parameter(Mandatory)]
-        [string]$InputFilePath
-    )
-    
-    try {
-        $bytes = [System.IO.File]::ReadAllBytes($InputFilePath)
-        $entries = @()
-        $i = 0
-        
-        # Skip past the first MapItem
-        $i = 11
-        
-        while ($i -lt $bytes.Length) {
-            $entry = @{
-                Name     = ""
-                ExePath  = ""
-                StartDir = ""
-            }
-            
-            # Read entry index
-            $nameBuf = ""
-            while ($i -lt $bytes.Length -and $bytes[$i] -ne 0) {
-                $nameBuf += [char]$bytes[$i]
-                $i++
-            }
-            $i++  # skip null
-            
-            if ($i -ge $bytes.Length) { break }
-            
-            $i++  # Next byte (0x00)
-            
-            while ($i -lt $bytes.Length -and $bytes[$i] -ne 0x08) {
-                $itemType = $bytes[$i]
-                $i++
-                
-                $propName = ""
-                while ($i -lt $bytes.Length -and $bytes[$i] -ne 0) {
-                    $propName += [char]$bytes[$i]
-                    $i++
-                }
-                $i++
-                
-                switch ($itemType) {
-                    0x01 {
-                        $propValue = ""
-                        while ($i -lt $bytes.Length -and $bytes[$i] -ne 0) {
-                            $propValue += [char]$bytes[$i]
-                            $i++
-                        }
-                        $i++
-                        
-                        switch ($propName) {
-                            "appname" { $entry.Name    = $propValue }
-                            "exe"     { $entry.ExePath = $propValue.Trim('"') }
-                            "StartDir"{ $entry.StartDir = $propValue.Trim('"') }
-                        }
-                    }
-                    0x02 {
-                        $i += 4  # Skip number
-                    }
-                    0x00 {
-                        $depth = 1
-                        while ($i -lt $bytes.Length -and $depth -gt 0) {
-                            if ($bytes[$i] -eq 0x00) {
-                                $depth++
-                                $i++
-                                while ($i -lt $bytes.Length -and $bytes[$i] -ne 0) { $i++ }
-                                $i++
-                            }
-                            elseif ($bytes[$i] -eq 0x08) {
-                                $depth--
-                                $i++
-                            }
-                            else {
-                                $i++
-                            }
-                        }
-                    }
-                    default {
-                        break
-                    }
-                }
-            }
-            
-            $i++
-            
-            if ($entry.Name -and $entry.ExePath -and $entry.StartDir) {
-                Write-Host "Found existing shortcut: $($entry.Name)" -ForegroundColor Cyan
-                $entries += [PSCustomObject]$entry
-            }
-        }
-        
-        return $entries
-    } catch {
-        Write-Host "Error reading shortcuts.vdf: $_" -ForegroundColor Yellow
-        return @()
-    }
 }
 

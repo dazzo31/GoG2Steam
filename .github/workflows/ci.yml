@@ -40,5 +40,14 @@ jobs:
       - name: Run Pester Tests
         shell: pwsh
         run: |
-          Invoke-Pester -Configuration @{ Run = @{ Path = './tests' }; Output = @{ Verbosity = 'Detailed' } }
+          Invoke-Pester -Configuration @{ Run = @{ Path = './tests/GoG2Steam.Tests.ps1' }; Output = @{ Verbosity = 'Detailed' } }
+
+      - name: Windows PowerShell 5.1 Safety Regression Suite
+        shell: powershell
+        run: ./tests/Safety.Tests.ps1
+
+      - name: PowerShell 7 Safety Regression Suite
+        shell: pwsh
+        run: ./tests/Safety.Tests.ps1
+
 

@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
+## Unreleased - shortcut preservation and safer writes
+
+- Preserve complete existing VDF records, including non-EXE shortcuts and Unicode.
+- Reject malformed/unsupported input; remove the duplicate reader implementation.
+- Match duplicates by executable and launch arguments; preserve existing settings.
+- Validate temporary output before atomic replacement; abort on backup failure.
+- Honour unattended force-close permission and stop if Steam remains running.
+- Skip Steam process changes, transcripts and dependency installs during dry runs.
+- Add a standalone safety suite and Windows PowerShell 5.1 / PowerShell 7 CI.
+
 ## [1.1.1] - 2025-08-08
 ### Added
 - Unified interactive options menu with numeric input

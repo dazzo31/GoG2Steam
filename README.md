@@ -21,6 +21,38 @@ Why you’ll love it:
 
 Make Steam your single launcher — keep friends, overlays, controller configs, and playtime tracking in one place.
 
+## Safety improvements (unreleased)
+
+Use the source files at the repository root for these changes. The archives under
+`Releases/` are older releases and do not include this patch.
+
+- Existing shortcut records are preserved byte-for-byte, including AppIDs, custom
+  icons, tags, launch arguments, working directories and other settings.
+- Malformed or unsupported VDF input stops the import instead of being treated as
+  an empty library. Keep your original file when reporting an unsupported format.
+- Duplicate detection compares executable paths (case-insensitive) and launch
+  arguments (case-sensitive). Existing names and settings remain unchanged;
+  different games with the same name or shared launcher can coexist.
+- Output is written to a temporary file in the destination directory, parsed for
+  validation, then atomically replaces the destination. Failed validation leaves
+  the destination unchanged. Failure to create a requested backup stops the run.
+- Unattended runs refuse to close Steam unless `-ForceCloseSteam` is supplied,
+  and stop if Steam remains running. Steam is checked again before writing.
+- Dry runs skip Steam shutdown/relaunch, transcript creation and dependency
+  installation. Install the SQLite dependency before previewing an import.
+
+Run the standalone safety regression suite without Steam or GOG installed:
+
+```powershell
+powershell.exe -NoProfile -File .\tests\Safety.Tests.ps1
+# Or PowerShell 7:
+pwsh -NoProfile -File ./tests/Safety.Tests.ps1
+```
+
+The suite checks binary preservation, corrupt input, safe replacement, duplicate
+identity and the unattended process guard. Windows CI runs it on both PowerShell
+5.1 and 7.
+
 ## Recent Updates
 
 ### Version 1.1.1 - August 8, 2025
